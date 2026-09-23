@@ -153,6 +153,56 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
+  // Serve static assets from public/ directory
+  const publicDir = path.join(process.cwd(), 'public');
+  if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+  }
+
+  // Explicit handlers for browser icons and metadata to guarantee 0 404 errors
+  app.get(['/favicon.ico', '/favicon.svg'], (_req, res) => {
+    const svgPath = path.join(publicDir, 'favicon.svg');
+    const icoPath = path.join(publicDir, 'favicon.ico');
+    if (fs.existsSync(svgPath)) {
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.sendFile(svgPath);
+    } else if (fs.existsSync(icoPath)) {
+      res.setHeader('Content-Type', 'image/x-icon');
+      res.sendFile(icoPath);
+    } else {
+      res.status(204).end();
+    }
+  });
+
+  app.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], (_req, res) => {
+    const pngPath = path.join(publicDir, 'apple-touch-icon.png');
+    if (fs.existsSync(pngPath)) {
+      res.setHeader('Content-Type', 'image/png');
+      res.sendFile(pngPath);
+    } else {
+      res.status(204).end();
+    }
+  });
+
+  app.get(['/manifest.json', '/site.webmanifest'], (_req, res) => {
+    const manifestPath = path.join(publicDir, 'manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      res.setHeader('Content-Type', 'application/manifest+json');
+      res.sendFile(manifestPath);
+    } else {
+      res.json({});
+    }
+  });
+
+  app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain').send('User-agent: *\nAllow: /\n');
+  });
+
+  // Sourcemap handler to eliminate browser devtools 404 warnings
+  app.get('*.map', (_req, res) => {
+    res.status(200).json({ version: 3, sources: [], mappings: '' });
+  });
+
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({
