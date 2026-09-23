@@ -151,6 +151,16 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Request logger for troubleshooting
+  app.use((req, res, next) => {
+    res.on('finish', () => {
+      if (res.statusCode === 404) {
+        console.warn(`[404 NOT FOUND] ${req.method} ${req.originalUrl}`);
+      }
+    });
+    next();
+  });
+
   app.use(express.json({ limit: '10mb' }));
 
   // Serve static assets from public/ directory
@@ -174,17 +184,33 @@ async function startServer() {
     }
   });
 
-  app.get(['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'], (_req, res) => {
-    const pngPath = path.join(publicDir, 'apple-touch-icon.png');
-    if (fs.existsSync(pngPath)) {
-      res.setHeader('Content-Type', 'image/png');
-      res.sendFile(pngPath);
-    } else {
-      res.status(204).end();
+  app.get(
+    [
+      '/apple-touch-icon*.png',
+      '/favicon*.png',
+      '/icon-*.png',
+      '/logo*.png',
+      '/apple-touch-icon-precomposed.png',
+    ],
+    (req, res) => {
+      const fileName = path.basename(req.path);
+      const filePath = path.join(publicDir, fileName);
+      if (fs.existsSync(filePath)) {
+        res.setHeader('Content-Type', 'image/png');
+        res.sendFile(filePath);
+      } else {
+        const defaultIcon = path.join(publicDir, 'apple-touch-icon.png');
+        if (fs.existsSync(defaultIcon)) {
+          res.setHeader('Content-Type', 'image/png');
+          res.sendFile(defaultIcon);
+        } else {
+          res.status(204).end();
+        }
+      }
     }
-  });
+  );
 
-  app.get(['/manifest.json', '/site.webmanifest'], (_req, res) => {
+  app.get(['/manifest.json', '/site.webmanifest', '/manifest.webmanifest'], (_req, res) => {
     const manifestPath = path.join(publicDir, 'manifest.json');
     if (fs.existsSync(manifestPath)) {
       res.setHeader('Content-Type', 'application/manifest+json');
@@ -192,6 +218,16 @@ async function startServer() {
     } else {
       res.json({});
     }
+  });
+
+  app.get(['/sw.js', '/service-worker.js'], (_req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send('self.addEventListener("install", () => self.skipWaiting());\nself.addEventListener("activate", () => self.clients.claim());\n');
+  });
+
+  app.get('/browserconfig.xml', (_req, res) => {
+    res.setHeader('Content-Type', 'application/xml');
+    res.send('<?xml version="1.0" encoding="utf-8"?><browserconfig><msapplication><tile></tile></msapplication></browserconfig>');
   });
 
   app.get('/robots.txt', (_req, res) => {
@@ -819,6 +855,21 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // Fallback in dev for non-Vite intercepted requests
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      if (url.startsWith('/api/')) {
+        return res.status(404).json({ success: false, error: 'Endpoint not found' });
+      }
+      try {
+        let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
