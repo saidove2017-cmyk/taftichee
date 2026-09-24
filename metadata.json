@@ -1,6 +1,0 @@
-{
-  "name": "نظام تدبير مهام التفتيش والمراقبة",
-  "description": "تطبيق سحابي متزامن لإدارة وتوثيق مهام التفتيش وتخزين البيانات وتصديرها للأجهزة المكتبية والهواتف الذكية",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
